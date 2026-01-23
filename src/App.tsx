@@ -167,7 +167,15 @@ const App: React.FC = () => {
       {/* Global Footer */}
       <footer className="py-8 px-6 border-t border-white/5 text-center">
         <p className="text-slate-600 text-xs font-medium uppercase tracking-[0.2em]">
-          Powered by Google Gemini • RAPS x BLAST Protocol
+          Development by{' '}
+          <a
+            href="https://www.instagram.com/sagar.parmar.x90/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-neon-purple hover:text-neon-blue transition-colors underline decoration-neon-purple/30 underline-offset-4"
+          >
+            Sagar P
+          </a>
         </p>
       </footer>
     </div>
