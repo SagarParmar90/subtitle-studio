@@ -18,7 +18,7 @@ cd "q:/SUBTITLE APP"
 
 ```bash
 # Add GitHub remote (replace YOUR_USERNAME with your GitHub username)
-git remote add origin https://github.com/YOUR_USERNAME/subtitle-studio.git
+git remote add origin https://github.com/SagarParmar90/subtitle-studio.git
 
 # Rename branch to main
 git branch -M main

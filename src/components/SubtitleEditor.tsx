@@ -7,9 +7,11 @@ import { SRTSettings } from './SRTSettings';
 interface SubtitleEditorProps {
     words: SubtitleWord[];
     onWordsChange: (words: SubtitleWord[]) => void;
+    userApiKey?: string;
+    onQuotaExceeded: () => void;
 }
 
-export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ words, onWordsChange }) => {
+export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ words, onWordsChange, userApiKey, onQuotaExceeded }) => {
     const [currentTime, setCurrentTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [exportFormat, setExportFormat] = useState<ExportFormat>('srt');
@@ -108,7 +110,7 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ words, onWordsCh
                                             {word.startTime.toFixed(2)}s
                                         </span>
                                         <button className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-opacity">
-                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 17.59 13.41 12z" /></svg>
                                         </button>
                                     </div>
                                     <input
@@ -180,10 +182,15 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ words, onWordsCh
                             onClick={async () => {
                                 try {
                                     const { transliterateText } = await import('../services/geminiService');
-                                    const romanized = await transliterateText(words);
+                                    // Use userApiKey if available
+                                    const romanized = await transliterateText(words, 'English', userApiKey);
                                     onWordsChange(romanized);
-                                } catch (error) {
-                                    alert(error instanceof Error ? error.message : 'Romanization failed');
+                                } catch (error: any) {
+                                    if (error.message === 'QUOTA_EXCEEDED') {
+                                        onQuotaExceeded();
+                                    } else {
+                                        alert(error instanceof Error ? error.message : 'Romanization failed');
+                                    }
                                 }
                             }}
                             className="w-full py-2 px-4 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-neon-blue/10 hover:border-neon-blue/50 hover:text-neon-blue transition-all text-xs font-bold uppercase tracking-wider flex items-center gap-2"

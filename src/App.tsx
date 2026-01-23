@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { AppState, SubtitleWord } from './types';
 import { LogoIcon } from './components/icons/LogoIcon';
 import { FileUpload } from './components/FileUpload';
 import { LanguageSelector } from './components/LanguageSelector';
 import { SubtitleEditor } from './components/SubtitleEditor';
+import { ApiKeyModal } from './components/ApiKeyModal';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('idle');
@@ -21,9 +22,34 @@ const App: React.FC = () => {
     { word: "creation", startTime: 5.3, endTime: 6.0 },
   ]);
 
-  const handleFileSelect = async (selectedFile: File) => {
+  // API Key State
+  const [userApiKey, setUserApiKey] = useState<string>('');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const storedKey = localStorage.getItem('user_gemini_api_key');
+    if (storedKey) setUserApiKey(storedKey);
+  }, []);
+
+  const handleSaveApiKey = (key: string) => {
+    setUserApiKey(key);
+    localStorage.setItem('user_gemini_api_key', key);
+    setIsApiKeyModalOpen(false);
+
+    // Retry pending file if any
+    if (pendingFile) {
+      handleFileSelect(pendingFile, key);
+      setPendingFile(null);
+    }
+  };
+
+  const handleFileSelect = async (selectedFile: File, apiKeyOverride?: string) => {
     setFile(selectedFile);
     setAppState('loading');
+
+    // Use the override if provided (retry scenario), otherwise current state
+    const currentApiKey = apiKeyOverride || userApiKey;
 
     try {
       const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
@@ -38,14 +64,24 @@ const App: React.FC = () => {
       } else if (fileExt === 'mp3' || fileExt === 'wav') {
         // Transcribe audio
         const { transcribeAudio } = await import('./services/geminiService');
-        const transcribedWords = await transcribeAudio(selectedFile, selectedLanguage);
+        const transcribedWords = await transcribeAudio(selectedFile, selectedLanguage, currentApiKey);
         setWords(transcribedWords);
         setAppState('editing');
       } else {
         throw new Error('Unsupported file type. Please upload .mp3, .wav, or .srt files.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("File processing error:", error);
+
+      if (error.message === 'QUOTA_EXCEEDED') {
+        setPendingFile(selectedFile);
+        setIsApiKeyModalOpen(true);
+        // We stay in 'loading' visually, or switch to 'idle'? 
+        // If we switch to idle, the loading spinner disappears, which is fine since modal is up.
+        setAppState('idle');
+        return;
+      }
+
       setAppState('error');
       alert(error instanceof Error ? error.message : 'Failed to process file');
     }
@@ -65,7 +101,7 @@ const App: React.FC = () => {
                 Subtitle <span className="text-neon-purple">Studio</span>
               </h1>
               <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
-                v1.0 AI Engine
+                v1.1 AI Engine
               </span>
             </div>
           </div>
@@ -160,9 +196,20 @@ const App: React.FC = () => {
         )}
 
         {appState === 'editing' && (
-          <SubtitleEditor words={words} onWordsChange={setWords} />
+          <SubtitleEditor
+            words={words}
+            onWordsChange={setWords}
+            userApiKey={userApiKey}
+            onQuotaExceeded={() => setIsApiKeyModalOpen(true)}
+          />
         )}
       </main>
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onSave={handleSaveApiKey}
+      />
 
       {/* Global Footer */}
       <footer className="py-8 px-6 border-t border-white/5 text-center">

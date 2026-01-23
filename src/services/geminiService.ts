@@ -1,13 +1,24 @@
 import { GoogleGenAI } from "@google/genai";
 import type { SubtitleWord } from "../types";
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const DEFAULT_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
-if (!API_KEY) {
+if (!DEFAULT_API_KEY) {
     console.warn("⚠️ VITE_GEMINI_API_KEY not found. AI features will be disabled.");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const defaultAi = new GoogleGenAI({ apiKey: DEFAULT_API_KEY });
+
+// Get AI client (either default or user-provided)
+const getAiClient = (userApiKey?: string) => {
+    if (userApiKey) {
+        return new GoogleGenAI({ apiKey: userApiKey });
+    }
+    if (!DEFAULT_API_KEY) {
+        throw new Error("Gemini API key is missing. Please add VITE_GEMINI_API_KEY to your .env file or provide a custom key.");
+    }
+    return defaultAi;
+};
 
 // Convert File to Base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -22,12 +33,9 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
-export const transcribeAudio = async (audioFile: File, language: string): Promise<SubtitleWord[]> => {
-    if (!API_KEY) {
-        throw new Error("Gemini API key is missing. Please add VITE_GEMINI_API_KEY to your .env file.");
-    }
-
+export const transcribeAudio = async (audioFile: File, language: string, userApiKey?: string): Promise<SubtitleWord[]> => {
     try {
+        const ai = getAiClient(userApiKey);
         const base64Audio = await fileToBase64(audioFile);
         const mimeType = audioFile.type || 'audio/mpeg';
 
@@ -72,18 +80,21 @@ Return ONLY valid JSON, no markdown formatting.`
 
         return words;
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Transcription error:", error);
+
+        // Handle Quota Limits
+        if (error.status === 429 || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error('QUOTA_EXCEEDED');
+        }
+
         throw new Error(`Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
 
-export const transliterateText = async (words: SubtitleWord[], targetLanguage: string = 'English'): Promise<SubtitleWord[]> => {
-    if (!API_KEY) {
-        throw new Error("Gemini API key is missing. Please add VITE_GEMINI_API_KEY to your .env file.");
-    }
-
+export const transliterateText = async (words: SubtitleWord[], targetLanguage: string = 'English', userApiKey?: string): Promise<SubtitleWord[]> => {
     try {
+        const ai = getAiClient(userApiKey);
         const originalText = words.map(w => w.word).join(' ');
 
         const response = await ai.models.generateContent({
@@ -103,8 +114,14 @@ Text: "${originalText}"`
             word: transliteratedWords[idx] || word.word
         }));
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Transliteration error:", error);
+
+        // Handle Quota Limits
+        if (error.status === 429 || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error('QUOTA_EXCEEDED');
+        }
+
         throw new Error(`Transliteration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
